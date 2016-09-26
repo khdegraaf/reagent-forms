@@ -295,14 +295,13 @@
   (letfn [(handle-click! []
            (if multi-select
              (do
-               (swap! selections update-in [key] not)
-               (save! id (->> @selections (filter second) (map first))))
-             (let [value (get @selections key)]
-               (reset! selections {key (not value)})
-               (save! id (when (get @selections key) key)))))]
+               (save! id (->> selections (update-in [key] not) (filter second) (map first))))
+             (let [value (get selections key)]
+               (.log js/console "selections=" selections ", key=" key)
+               (save! id (when-not (get selections key) key)))))]
 
     (fn []
-      [type (merge {:class (if (get @selections key) "active")
+      [type (merge {:class (if (get selections key) "active")
                     (or touch-event :on-click) handle-click!} attrs) body])))
 
 (defn- mk-selections [id selectors {:keys [get multi-select]}]
@@ -320,21 +319,22 @@
 
 (defn- selection-group
   [[type {:keys [field id] :as attrs} & selection-items] {:keys [get] :as opts}]
-  (let [selection-items (extract-selectors selection-items)
-        selections (atom (mk-selections id selection-items opts))
-        selectors  (map (fn [item]
+  (let [selection-items (extract-selectors selection-items)]
+    (fn []
+      (let [selections (mk-selections id selection-items opts)
+            selectors  (map (fn [item]
                           {:visible? (:visible? (second item))
                            :selector [(group-item item opts selections field id)]})
                         selection-items)]
-    (fn []
-      (when-not (get id)
-        (swap! selections #(into {} (map (fn [[k]] [k false]) %))))
+      ;(when-not (get id)
+      ;  (swap! selections #(into {} (map (fn [[k]] [k false]) %))))
       (into [type attrs]
             (->> selectors
                   (filter
                    #(if-let [visible? (:visible? %)]
                       (visible? @(:doc opts)) true))
                   (map :selector))))))
+        )
 
 (defmethod init-field :single-select
   [[_ attrs :as field] {:keys [doc] :as opts}]
@@ -358,19 +358,16 @@
        (first)
        (last)))
 
-(defmethod init-field :list
+(defmethod reagent-forms.core/init-field :list
   [[type {:keys [field id] :as attrs} & options] {:keys [doc get save!]}]
   (let [options (extract-selectors options)
-        options-lookup (map-options options)
-        selection (atom (or
-                         (get id)
-                         (get-in (first options) [1 :key])))]
-    (save! id @selection)
+        selection #(or (get id) (get-in (first options) [1 :key]))]
+    (save! id (selection))
     (render-element attrs doc
       [type
        (merge attrs
-              {:default-value (default-selection options @selection)
-               :on-change #(save! id (clojure.core/get options-lookup (value-of %)))})
+              {:value (selection)
+               :on-change #(save! id (value-of %))})
        (doall
          (filter
            #(if-let [visible? (:visible? (second %))]
