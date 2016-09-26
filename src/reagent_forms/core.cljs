@@ -358,7 +358,7 @@
        (first)
        (last)))
 
-(defmethod reagent-forms.core/init-field :list
+(defmethod init-field :list
   [[type {:keys [field id] :as attrs} & options] {:keys [doc get save!]}]
   (let [options (extract-selectors options)
         selection #(or (get id) (get-in (first options) [1 :key]))]
